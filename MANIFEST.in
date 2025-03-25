@@ -1,0 +1,5 @@
+include README.md
+include requirements.txt
+include config.json
+recursive-include src/financial_misinfo/data *
+recursive-include src/financial_misinfo/ui *

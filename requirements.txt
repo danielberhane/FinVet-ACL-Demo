@@ -1,0 +1,17 @@
+streamlit>=1.20.0
+numpy>=1.20,<2.0
+faiss-cpu
+sentence-transformers
+requests
+tqdm
+pandas
+scikit-learn
+torch
+bert-score
+transformers
+asyncio
+nest-asyncio
+langchain
+langchain-community
+# Install pyarrow separately if you encounter build issues:
+# pip install pyarrow==11.0.0
