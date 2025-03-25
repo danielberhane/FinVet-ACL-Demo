@@ -363,71 +363,71 @@ class DataHandlerAgent:
             print(f"Warning: Could not save index: {str(e)}")
             return None
 
-def load_index(self, vector_path=None, metadata_path=None):
-    """
-    Load the vector store and metadata from files with proper path resolution.
-    
-    Args:
-        vector_path: Path to the vector store file (optional)
-        metadata_path: Path to the metadata file (optional)
+    def load_index(self, vector_path=None, metadata_path=None):
+        """
+        Load the vector store and metadata from files with proper path resolution.
         
-    Returns:
-        Dict with the resolved paths used on success
-        
-    Raises:
-        FileNotFoundError: If files cannot be found
-        ValueError: If metadata format is invalid
-    """
-    try:
-        # Use provided paths or default to simple filenames
-        vector_path = vector_path or "faiss_index.bin"
-        metadata_path = metadata_path or "metadata.pkl"
-        
-        # Resolve paths
-        resolved_vector_path = self.resolve_path(vector_path)
-        resolved_metadata_path = self.resolve_path(metadata_path)
-        
-        # Check if files exist
-        if not os.path.exists(resolved_vector_path):
-            raise FileNotFoundError(f"Vector store file not found at {resolved_vector_path} (original path: {vector_path})")
-        
-        if not os.path.exists(resolved_metadata_path):
-            raise FileNotFoundError(f"Metadata file not found at {resolved_metadata_path} (original path: {metadata_path})")
-        
-        # Load vector store
-        self.vector_store = faiss.read_index(resolved_vector_path)
-        
-        # Load metadata
-        with open(resolved_metadata_path, "rb") as f:
-            data = pickle.load(f)
+        Args:
+            vector_path: Path to the vector store file (optional)
+            metadata_path: Path to the metadata file (optional)
             
-            # Validate data structure
-            if not isinstance(data, dict):
-                raise ValueError(f"Invalid metadata format: expected dict, got {type(data)}")
+        Returns:
+            Dict with the resolved paths used on success
             
-            if 'metadata' not in data or 'chunks' not in data:
-                raise ValueError("Invalid metadata format: missing required keys")
+        Raises:
+            FileNotFoundError: If files cannot be found
+            ValueError: If metadata format is invalid
+        """
+        try:
+            # Use provided paths or default to simple filenames
+            vector_path = vector_path or "faiss_index.bin"
+            metadata_path = metadata_path or "metadata.pkl"
             
-            self.metadata = data['metadata']
-            self.chunks = data['chunks']
-        
-        # Validate loaded data
-        if len(self.metadata) == 0 or len(self.chunks) == 0:
-            raise ValueError("Loaded empty metadata or chunks - index may be corrupted")
-        
-        print(f"Successfully loaded index from {resolved_vector_path} and metadata from {resolved_metadata_path}")
-        
-        # Mark that we've successfully loaded the index
-        self._tried_autoload = True
-        
-        return {
-            'vector_path': resolved_vector_path,
-            'metadata_path': resolved_metadata_path
-        }
-    except Exception as e:
-        print(f"Error loading index: {str(e)}")
-        # Clear partial state on error
-        self.vector_store = None
-        self.metadata = []
-        self.chunks = []
-        raise
+            # Resolve paths
+            resolved_vector_path = self.resolve_path(vector_path)
+            resolved_metadata_path = self.resolve_path(metadata_path)
+            
+            # Check if files exist
+            if not os.path.exists(resolved_vector_path):
+                raise FileNotFoundError(f"Vector store file not found at {resolved_vector_path} (original path: {vector_path})")
+            
+            if not os.path.exists(resolved_metadata_path):
+                raise FileNotFoundError(f"Metadata file not found at {resolved_metadata_path} (original path: {metadata_path})")
+            
+            # Load vector store
+            self.vector_store = faiss.read_index(resolved_vector_path)
+            
+            # Load metadata
+            with open(resolved_metadata_path, "rb") as f:
+                data = pickle.load(f)
+                
+                # Validate data structure
+                if not isinstance(data, dict):
+                    raise ValueError(f"Invalid metadata format: expected dict, got {type(data)}")
+                
+                if 'metadata' not in data or 'chunks' not in data:
+                    raise ValueError("Invalid metadata format: missing required keys")
+                
+                self.metadata = data['metadata']
+                self.chunks = data['chunks']
+            
+            # Validate loaded data
+            if len(self.metadata) == 0 or len(self.chunks) == 0:
+                raise ValueError("Loaded empty metadata or chunks - index may be corrupted")
+            
+            print(f"Successfully loaded index from {resolved_vector_path} and metadata from {resolved_metadata_path}")
+            
+            # Mark that we've successfully loaded the index
+            self._tried_autoload = True
+            
+            return {
+                'vector_path': resolved_vector_path,
+                'metadata_path': resolved_metadata_path
+            }
+        except Exception as e:
+            print(f"Error loading index: {str(e)}")
+            # Clear partial state on error
+            self.vector_store = None
+            self.metadata = []
+            self.chunks = []
+            raise
