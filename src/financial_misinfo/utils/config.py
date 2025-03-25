@@ -238,6 +238,7 @@ def ensure_data_files():
     except Exception as e:
         print(f"Error downloading data files: {e}")
         print("\nPlease download these files manually from:")
-        print("https://github.com/danielberhane/FinVet-Demo/releases")
+        # Change this line to point to your new repository
+        print("https://github.com/danielberhane/FinVet-ACL-Demo/releases/latest")
         print(f"And place them in: {DEFAULT_VECTOR_STORE_PATH.parent}")
         return False

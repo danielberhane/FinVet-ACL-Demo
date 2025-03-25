@@ -359,10 +359,17 @@ with col1:
     
     # Advanced Settings
     with st.expander("Advanced Settings", expanded=False):
-        vector_path = st.text_input("Vector Store Path", 
-                          value=os.path.basename(config.get('vector_store_path', '')))
-        metadata_path = st.text_input("Metadata Path", 
-                            value=os.path.basename(config.get('metadata_path', '')))
+        vector_path = st.text_input(
+                 "Vector Store Path", 
+                 value=os.path.basename(config.get('vector_store_path', '')),
+                help="The file will be stored in your home directory at ~/.financial-misinfo/ (macOS/Linux) or C:\\Users\\YourUsername\\.financial-misinfo\\ (Windows)"
+               )
+        
+        metadata_path = st.text_input(
+                "Metadata Path", 
+                value=os.path.basename(config.get('metadata_path', '')),
+                help="The file will be stored in your home directory at ~/.financial-misinfo/ (macOS/Linux) or C:\\Users\\YourUsername\\.financial-misinfo\\ (Windows)"
+            )
         
         # Timeout setting
         timeout = st.slider("Timeout (seconds)", 30, 300, 180, 30)
@@ -629,5 +636,5 @@ with col2:
 
 # Footer
 st.markdown('<div class="footer">', unsafe_allow_html=True)
-st.markdown("FinVet: Financial Misinformation Detection System v0.1.2", unsafe_allow_html=True)
+st.markdown("FinVet: Financial Misinformation Detection System v0.1.4", unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
