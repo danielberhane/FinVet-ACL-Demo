@@ -76,6 +76,89 @@ def on_change_claim():
 
 
 
+def call_cli_verify(claim, hf_token, google_key, timeout=180):
+    try:
+        # Create temporary config file with credentials
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_config:
+            config_data = {
+                "hf_token": hf_token,
+                "google_api_key": google_key,
+                # Copy other settings from the loaded config
+                **{k: v for k, v in load_config(verbose=False).items() 
+                   if k not in ["hf_token", "google_api_key"]}
+            }
+            json.dump(config_data, temp_config)
+            temp_config_path = temp_config.name
+        
+        try:
+            # Use sys.executable to ensure we're using the correct Python interpreter
+            import sys
+            cmd = [
+                sys.executable, "-m", "financial_misinfo", 
+                "--config", temp_config_path,
+                "verify",
+                claim
+            ]
+            
+            # Run the command with timeout
+            process = subprocess.Popen(
+                cmd, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            # Wait for the process with timeout
+            try:
+                stdout, stderr = process.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                stdout, stderr = process.communicate()
+                return {
+                    "error": f"Verification timed out after {timeout} seconds",
+                    "details": stdout + stderr
+                }
+            finally:
+                # Clean up temp file
+                try:
+                    os.unlink(temp_config_path)
+                except:
+                    pass
+
+            if stderr and "error" in stderr.lower():
+                return {
+                    "error": "Error during verification",
+                    "details": stderr
+                }
+            
+            # Parsing logic for the verification result
+            result = {
+                "final_verdict": {
+                    "label": "unknown",
+                    "evidence": "No evidence provided",
+                    "source": [],
+                    "confidence": 0.0
+                }
+            }
+            
+            return result
+        
+        except FileNotFoundError:
+            return {
+                "error": "Verification module not found",
+                "details": "Unable to locate the financial_misinfo module"
+            }
+    
+    except Exception as e:
+        return {
+            "error": str(e),
+            "details": traceback.format_exc()
+        }
+
+
+
+
+"""
 # Function to call CLI verification
 def call_cli_verify(claim, hf_token, google_key, timeout=180):
     
@@ -149,7 +232,7 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
             "error": str(e),
             "details": traceback.format_exc()
         }
-
+"""
 
 # Function to check index files
 def check_index_files(config):
