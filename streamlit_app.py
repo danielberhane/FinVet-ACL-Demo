@@ -9,6 +9,14 @@ import json
 import subprocess
 import requests
 
+# Set page configuration
+st.set_page_config(
+    page_title="FinVet | Financial Misinfo Detector",
+    page_icon="💹",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
 # Add project root and src to Python path
 project_root = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, project_root)
@@ -183,13 +191,7 @@ def check_index_files(config):
     
     return issues
 
-# Set page configuration
-st.set_page_config(
-    page_title="FinVet | Financial Misinfo Detector",
-    page_icon="💹",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+
 
 # Custom CSS for the application
 st.markdown("""
