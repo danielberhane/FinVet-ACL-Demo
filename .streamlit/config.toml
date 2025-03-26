@@ -1,2 +1,2 @@
-[server]
-enableSourceFileWatcher = false
+[deprecation]
+showPyplotGlobalWarning = false

@@ -1,11 +1,12 @@
 import os
 import sys
+import warnings
 
-# Set environment variables to mitigate PyTorch-related issues
-os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
+# Disable specific warnings and set environment variables early
 os.environ['PYTHONWARNINGS'] = 'ignore'
+os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
 
-# Workaround for torch import issues
+# Patch torch-related issues before other imports
 try:
     import torch
     torch._C._jit_set_profiling_mode(False)
@@ -13,11 +14,22 @@ try:
 except:
     pass
 
-# Disable Streamlit's source file watcher for problematic modules
-import streamlit.watcher.local_sources_watcher as watcher
-def dummy_extract_paths(module):
-    return []
-watcher.extract_paths = dummy_extract_paths
+# Workaround for Streamlit's source file watcher
+try:
+    import streamlit.watcher.local_sources_watcher as watcher
+    def dummy_extract_paths(module):
+        return []
+    watcher.extract_paths = dummy_extract_paths
+except:
+    pass
+
+# Rest of the standard imports
+import streamlit as st
+import tempfile
+import json
+import subprocess
+import traceback
+
 
 # Rest of your imports
 import streamlit as st
@@ -102,14 +114,13 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
             config_data = {
                 "hf_token": hf_token,
                 "google_api_key": google_key,
-                # Copy other settings from the loaded config
                 **{k: v for k, v in load_config(verbose=False).items() 
                    if k not in ["hf_token", "google_api_key"]}
             }
             json.dump(config_data, temp_config)
             temp_config_path = temp_config.name
 
-        # Multiple strategies to run the command
+        # Multiple command strategies
         cmd_strategies = [
             ["financial-misinfo", "--config", temp_config_path, "verify", claim],
             [sys.executable, "-m", "financial_misinfo", "--config", temp_config_path, "verify", claim],
@@ -119,12 +130,13 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
         last_error = None
         for cmd in cmd_strategies:
             try:
-                # Run the command with timeout
+                # Enhanced subprocess handling
                 process = subprocess.Popen(
                     cmd, 
                     stdout=subprocess.PIPE, 
                     stderr=subprocess.PIPE,
-                    text=True
+                    text=True,
+                    env=dict(os.environ, PYTHONWARNINGS='ignore')
                 )
 
                 try:
@@ -135,12 +147,15 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
                     last_error = f"Verification timed out after {timeout} seconds"
                     continue
 
-                # Check for errors
+                # Comprehensive error checking
                 if stderr and "error" in stderr.lower():
-                    last_error = f"Error during verification: {stderr}"
+                    last_error = f"Verification error: {stderr}"
                     continue
 
-                # Default result if no specific parsing is possible
+                # Default result with logging
+                st.write(f"Verification stdout: {stdout}")
+                st.write(f"Verification stderr: {stderr}")
+
                 result = {
                     "final_verdict": {
                         "label": "unknown",
@@ -158,21 +173,20 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
                 last_error = str(e)
                 continue
             finally:
-                # Clean up temp file
                 try:
                     os.unlink(temp_config_path)
                 except:
                     pass
 
-        # If all attempts fail, return comprehensive error
+        # Fallback error handling
         return {
-            "error": "Verification failed",
-            "details": last_error or "Could not run verification command"
+            "error": "Verification completely failed",
+            "details": last_error or "No viable verification method found"
         }
 
     except Exception as e:
         return {
-            "error": str(e),
+            "error": "Critical verification error",
             "details": traceback.format_exc()
         }
 
