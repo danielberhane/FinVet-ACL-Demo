@@ -319,10 +319,10 @@ def main():
                         json.dump(config_data, temp_config)
                         config_path = temp_config.name
                     
-                    # Try two approaches - first CLI/module, then direct
-                    success = False
+                    # Start timing verification process
+                    start_time = time.time()
                     
-                    # 1. Try CLI/module approach
+                    # Try CLI/module approach
                     try:
                         if isinstance(cli_tool, list):
                             st.warning("Using module approach. This might fail if the module can't be imported.")
@@ -334,7 +334,8 @@ def main():
                         # Display the command being run
                         st.code(" ".join(cmd))
                         
-                        # Try with a shorter timeout first
+                        # Run verification
+                        st.info("Waiting for verification result...")
                         process = subprocess.Popen(
                             cmd, 
                             stdout=subprocess.PIPE, 
@@ -342,77 +343,208 @@ def main():
                             text=True
                         )
                         
-                        st.info("Waiting for verification result...")
-                        stdout, stderr = process.communicate(timeout=60)
+                        stdout, stderr = process.communicate(timeout=180)
                         
-                        # Check if we got a result
-                        if process.returncode == 0 and not stderr:
-                            success = True
-                            st.success("Verification complete!")
+                        if process.returncode == 0:
+                            # Success! Now process the results
+                            end_time = time.time()
                             
-                            # Display results based on output
-                            if "true" in stdout.lower():
-                                st.success("Claim appears to be TRUE")
-                            elif "false" in stdout.lower():
-                                st.error("Claim appears to be FALSE")
-                            else:
-                                st.warning("Not enough information to verify")
+                            # Show timing information
+                            verification_time = end_time - start_time
+                            st.success(f"Analysis completed in {verification_time:.2f} seconds")
+                            
+                            # Parse the output to extract structured information
+                            import re
+                            
+                            # Extract final verdict label
+                            verdict_match = re.search(r"Label:\s*(\w+)", stdout)
+                            verdict = "unknown"
+                            if verdict_match:
+                                verdict = verdict_match.group(1).upper()
+                                
+                                # Display verdict with appropriate styling
+                                if verdict == "TRUE":
+                                    st.success(f"## {verdict}")
+                                elif verdict == "FALSE":
+                                    st.error(f"## {verdict}")
+                                else:
+                                    st.warning(f"## NOT ENOUGH INFO")
+                            
+                            # Extract confidence
+                            confidence_match = re.search(r"Confidence:\s*([\d.]+)", stdout)
+                            if confidence_match:
+                                confidence = float(confidence_match.group(1))
+                                st.write(f"**Confidence:** {confidence}")
+                            
+                            # Extract evidence
+                            evidence_match = re.search(r"Evidence:\s*(.*?)(?:Source:|$)", stdout, re.DOTALL)
+                            if evidence_match:
+                                evidence = evidence_match.group(1).strip()
+                                st.subheader("Evidence:")
+                                st.markdown(evidence)
+                            
+                            # Extract source
+                            source_match = re.search(r"Source:\s*(.*?)(?:COMPONENT DETAILS:|$)", stdout, re.DOTALL)
+                            if source_match:
+                                source = source_match.group(1).strip()
+                                st.subheader("Source:")
+                                st.markdown(source)
+                            
+                            # Create component details tabs
+                            st.subheader("Component Details")
+                            rag_a_tab, rag_b_tab, fact_check_tab = st.tabs(["RAG A", "RAG B", "Fact Check"])
+                            
+                            # RAG A Details
+                            with rag_a_tab:
+                                rag_a_section = re.search(r"RAG PIPELINE A:(.*?)(?:RAG PIPELINE B:|$)", stdout, re.DOTALL)
+                                if rag_a_section:
+                                    rag_a_text = rag_a_section.group(1)
+                                    
+                                    # Get RAG A verdict
+                                    rag_a_verdict = re.search(r"Label:\s*(\w+)", rag_a_text)
+                                    if rag_a_verdict:
+                                        verdict = rag_a_verdict.group(1).upper()
+                                        if verdict == "TRUE":
+                                            st.success(verdict)
+                                        elif verdict == "FALSE":
+                                            st.error(verdict)
+                                        else:
+                                            st.warning("NOT ENOUGH INFO")
+                                    
+                                    # Get RAG A confidence
+                                    rag_a_conf = re.search(r"Confidence:\s*([\d.]+)", rag_a_text)
+                                    if rag_a_conf:
+                                        st.write(f"**Confidence:** {rag_a_conf.group(1)}")
+                                    
+                                    # Get RAG A evidence
+                                    rag_a_evid = re.search(r"Evidence:\s*(.*?)(?:Source:|$)", rag_a_text, re.DOTALL)
+                                    if rag_a_evid:
+                                        evidence = rag_a_evid.group(1).strip()
+                                        st.write("**Evidence:**")
+                                        st.markdown(evidence)
+                                    
+                                    # Get RAG A source
+                                    rag_a_src = re.search(r"Source:\s*(.*?)(?:$|RAG PIPELINE B:)", rag_a_text, re.DOTALL)
+                                    if rag_a_src:
+                                        source = rag_a_src.group(1).strip()
+                                        st.write("**Source:**")
+                                        st.markdown(source)
+                            
+                            # RAG B Details
+                            with rag_b_tab:
+                                rag_b_section = re.search(r"RAG PIPELINE B:(.*?)(?:FACT CHECK:|$)", stdout, re.DOTALL)
+                                if rag_b_section:
+                                    rag_b_text = rag_b_section.group(1)
+                                    
+                                    # Get RAG B verdict
+                                    rag_b_verdict = re.search(r"Label:\s*(\w+)", rag_b_text)
+                                    if rag_b_verdict:
+                                        verdict = rag_b_verdict.group(1).upper()
+                                        if verdict == "TRUE":
+                                            st.success(verdict)
+                                        elif verdict == "FALSE":
+                                            st.error(verdict)
+                                        else:
+                                            st.warning("NOT ENOUGH INFO")
+                                    
+                                    # Get RAG B confidence
+                                    rag_b_conf = re.search(r"Confidence:\s*([\d.]+)", rag_b_text)
+                                    if rag_b_conf:
+                                        st.write(f"**Confidence:** {rag_b_conf.group(1)}")
+                                    
+                                    # Get RAG B evidence
+                                    rag_b_evid = re.search(r"Evidence:\s*(.*?)(?:Source:|$)", rag_b_text, re.DOTALL)
+                                    if rag_b_evid:
+                                        evidence = rag_b_evid.group(1).strip()
+                                        st.write("**Evidence:**")
+                                        st.markdown(evidence)
+                                    
+                                    # Get RAG B source
+                                    rag_b_src = re.search(r"Source:\s*(.*?)(?:$|FACT CHECK:)", rag_b_text, re.DOTALL)
+                                    if rag_b_src:
+                                        source = rag_b_src.group(1).strip()
+                                        st.write("**Source:**")
+                                        st.markdown(source)
+                            
+                            # Fact Check Details
+                            with fact_check_tab:
+                                fact_section = re.search(r"FACT CHECK:(.*?)(?:======|$)", stdout, re.DOTALL)
+                                if fact_section:
+                                    fact_text = fact_section.group(1)
+                                    
+                                    # Get Fact Check verdict
+                                    fact_verdict = re.search(r"Label:\s*(\w+)", fact_text)
+                                    if fact_verdict:
+                                        verdict = fact_verdict.group(1).upper()
+                                        if verdict == "TRUE":
+                                            st.success(verdict)
+                                        elif verdict == "FALSE":
+                                            st.error(verdict)
+                                        else:
+                                            st.warning("NOT ENOUGH INFO")
+                                    
+                                    # Get Fact Check confidence
+                                    fact_conf = re.search(r"Confidence:\s*([\d.]+)", fact_text)
+                                    if fact_conf:
+                                        st.write(f"**Confidence:** {fact_conf.group(1)}")
+                                    
+                                    # Get Fact Check evidence
+                                    fact_evid = re.search(r"Evidence:\s*(.*?)(?:Source:|$)", fact_text, re.DOTALL)
+                                    if fact_evid:
+                                        evidence = fact_evid.group(1).strip()
+                                        st.write("**Evidence:**")
+                                        st.markdown(evidence)
+                                    
+                                    # Get Fact Check source
+                                    fact_src = re.search(r"Source:\s*(.*?)(?:$|======)", fact_text, re.DOTALL)
+                                    if fact_src:
+                                        source = fact_src.group(1).strip()
+                                        st.write("**Source:**")
+                                        st.markdown(source)
                             
                             # Show raw output
-                            with st.expander("Raw Output"):
+                            with st.expander("Raw Output", expanded=False):
                                 st.code(stdout)
+                        
                         else:
-                            st.error("CLI/module verification failed")
+                            # CLI command failed
+                            st.error("Verification failed")
                             if stderr:
                                 st.code(stderr)
+                            
+                            # Try direct verification as a fallback
+                            st.warning("Trying direct verification method...")
+                            
+                            try:
+                                # Import the system class
+                                from financial_misinfo.system import FinancialMisinfoSystem
+                                
+                                # Create the system with the config
+                                system = FinancialMisinfoSystem(config_data)
+                                
+                                # Run verification
+                                st.info(f"Verifying claim: {claim}")
+                                result = system.verify(claim)
+                                
+                                # Display results
+                                st.success("Verification complete!")
+                                st.write(result)
+                            except Exception as direct_error:
+                                st.error(f"Direct verification also failed: {str(direct_error)}")
+                                st.code(traceback.format_exc())
                     
                     except subprocess.TimeoutExpired:
                         process.kill()
-                        st.warning("Verification timed out. This might be due to slow processing.")
-                        success = False
-                    except Exception as e:
-                        st.error(f"Error with CLI/module approach: {e}")
-                        success = False
-                    
-                    # 2. If CLI/module didn't work, try direct approach
-                    if not success:
-                        st.warning("Trying direct verification approach...")
+                        st.error("Verification process timed out.")
                         
-                        try:
-                            # Try to directly import and use the system
-                            from financial_misinfo.system import FinancialMisinfoSystem
-                            
-                            # Show progress
-                            st.info("Initializing verification system...")
-                            
-                            # Create system with provided config
-                            system = FinancialMisinfoSystem(config_data)
-                            
-                            # Verify claim
-                            st.info(f"Verifying claim: {claim}")
-                            result = system.verify(claim)
-                            
-                            # Show result
-                            st.success("Verification complete!")
-                            st.json(result)
-                            
-                            if "label" in result:
-                                if result["label"].lower() == "true":
-                                    st.success("Claim appears to be TRUE")
-                                elif result["label"].lower() == "false":
-                                    st.error("Claim appears to be FALSE")
-                                else:
-                                    st.warning("Not enough information to verify")
-                            
-                            if "evidence" in result:
-                                st.subheader("Evidence")
-                                st.write(result["evidence"])
-                        except Exception as direct_error:
-                            st.error(f"Direct verification failed: {direct_error}")
-                            st.error(traceback.format_exc())
+                    except Exception as cmd_error:
+                        st.error(f"Error running verification: {str(cmd_error)}")
+                        st.code(traceback.format_exc())
+                
                 except Exception as e:
                     st.error(f"Verification error: {str(e)}")
                     st.code(traceback.format_exc())
+                
                 finally:
                     # Clean up temp file
                     try:
