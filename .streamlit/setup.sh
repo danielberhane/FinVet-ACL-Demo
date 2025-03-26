@@ -1,3 +1,3 @@
 #!/bin/bash
 pip install -e .
-python -m pip install torch --upgrade
+python -c "import financial_misinfo; print(financial_misinfo.__file__)"

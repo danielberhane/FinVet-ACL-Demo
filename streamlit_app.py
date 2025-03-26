@@ -1,6 +1,8 @@
 import os
 import sys
 import warnings
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 # Disable specific warnings and set environment variables early
 os.environ['PYTHONWARNINGS'] = 'ignore'
@@ -109,6 +111,57 @@ def on_change_claim():
 
 def call_cli_verify(claim, hf_token, google_key, timeout=180):
     try:
+        import shutil
+        import sys
+        import logging
+
+        # Extensive logging
+        logging.basicConfig(level=logging.DEBUG)
+        logger = logging.getLogger(__name__)
+
+        # Log system information
+        logger.debug(f"Python Executable: {sys.executable}")
+        logger.debug(f"Current Working Directory: {os.getcwd()}")
+        logger.debug(f"System PATH: {os.environ.get('PATH', '')}")
+
+        # Check for the CLI tool in multiple locations
+        def find_executable(name):
+            """Find executable in system PATH and common locations"""
+            locations = [
+                shutil.which(name),  # Search in PATH
+                os.path.join(sys.prefix, 'bin', name),  # Virtual env
+                os.path.join(sys.base_prefix, 'bin', name),  # Base Python bin
+                f"/home/adminuser/.local/bin/{name}",  # User local bin
+                f"/usr/local/bin/{name}",  # System bin
+            ]
+            return next((path for path in locations if path and os.path.exists(path)), None)
+
+        # Find the executable
+        cli_path = find_executable('financial-misinfo')
+        logger.debug(f"Found CLI at: {cli_path}")
+
+        # If no CLI found, try module-based approach
+        if not cli_path:
+            try:
+                # Attempt to run as a Python module
+                import importlib.util
+                spec = importlib.util.find_spec('financial_misinfo')
+                if spec:
+                    cli_path = sys.executable
+                    cmd = [cli_path, '-m', 'financial_misinfo', 'verify']
+                else:
+                    return {
+                        "error": "CLI not found",
+                        "details": "Could not locate financial-misinfo executable or module"
+                    }
+            except Exception as import_error:
+                return {
+                    "error": "Module import failed",
+                    "details": str(import_error)
+                }
+        else:
+            cmd = [cli_path]
+
         # Create temporary config file with credentials
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_config:
             config_data = {
@@ -120,43 +173,36 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
             json.dump(config_data, temp_config)
             temp_config_path = temp_config.name
 
-        # Multiple command strategies
-        cmd_strategies = [
-            ["financial-misinfo", "--config", temp_config_path, "verify", claim],
-            [sys.executable, "-m", "financial_misinfo", "--config", temp_config_path, "verify", claim],
-            [os.path.join(sys.prefix, "bin", "financial-misinfo"), "--config", temp_config_path, "verify", claim]
-        ]
+        # Complete the command
+        full_cmd = cmd + ["--config", temp_config_path, "verify", claim]
+        logger.debug(f"Full command: {' '.join(full_cmd)}")
 
-        last_error = None
-        for cmd in cmd_strategies:
+        try:
+            # Run the command with enhanced error handling
+            process = subprocess.Popen(
+                full_cmd, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                text=True,
+                env=dict(os.environ, PYTHONWARNINGS='ignore')
+            )
+
             try:
-                # Enhanced subprocess handling
-                process = subprocess.Popen(
-                    cmd, 
-                    stdout=subprocess.PIPE, 
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    env=dict(os.environ, PYTHONWARNINGS='ignore')
-                )
+                stdout, stderr = process.communicate(timeout=timeout)
+                
+                # Log raw output
+                logger.debug(f"STDOUT: {stdout}")
+                logger.debug(f"STDERR: {stderr}")
 
-                try:
-                    stdout, stderr = process.communicate(timeout=timeout)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    stdout, stderr = process.communicate()
-                    last_error = f"Verification timed out after {timeout} seconds"
-                    continue
-
-                # Comprehensive error checking
+                # Check for errors
                 if stderr and "error" in stderr.lower():
-                    last_error = f"Verification error: {stderr}"
-                    continue
+                    return {
+                        "error": "Verification error",
+                        "details": stderr
+                    }
 
                 # Default result with logging
-                st.write(f"Verification stdout: {stdout}")
-                st.write(f"Verification stderr: {stderr}")
-
-                result = {
+                return {
                     "final_verdict": {
                         "label": "unknown",
                         "evidence": "No evidence provided",
@@ -165,31 +211,30 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
                     }
                 }
 
-                return result
-
-            except FileNotFoundError:
-                continue
-            except Exception as e:
-                last_error = str(e)
-                continue
+            except subprocess.TimeoutExpired:
+                process.kill()
+                return {
+                    "error": f"Verification timed out after {timeout} seconds",
+                    "details": "Process took too long to complete"
+                }
             finally:
+                # Clean up temp file
                 try:
                     os.unlink(temp_config_path)
                 except:
                     pass
 
-        # Fallback error handling
-        return {
-            "error": "Verification completely failed",
-            "details": last_error or "No viable verification method found"
-        }
+        except Exception as exec_error:
+            return {
+                "error": "Execution failed",
+                "details": str(exec_error)
+            }
 
-    except Exception as e:
+    except Exception as critical_error:
         return {
             "error": "Critical verification error",
             "details": traceback.format_exc()
         }
-
 
 
 """
