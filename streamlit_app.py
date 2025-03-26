@@ -302,7 +302,6 @@ def main():
     with col2:
         st.subheader("Verification Results")
         
-        # Inside the verification part of the main function
         if verify and claim:
             with st.spinner("Analyzing claim..."):
                 try:
@@ -380,7 +379,7 @@ def main():
                         st.warning("Trying direct verification approach...")
                         
                         try:
-                            # Import necessary components directly
+                            # Try to directly import and use the system
                             from financial_misinfo.system import FinancialMisinfoSystem
                             
                             # Show progress
@@ -419,12 +418,8 @@ def main():
                     try:
                         if 'config_path' in locals():
                             os.unlink(config_path)
-                    except:
+                    except Exception:
                         pass
-                
-                except Exception as e:
-                    st.error(f"Error during verification: {str(e)}")
-                    st.code(traceback.format_exc())
     
     # Footer
     st.markdown("---")
