@@ -155,69 +155,57 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
 
 def call_cli_verify(claim, hf_token, google_key, timeout=180):
     try:
-        # Create temporary config file with credentials
+        # Import the verification system dynamically
+        from financial_misinfo.system import FinancialMisinfoSystem
+        
+        # Prepare configuration
+        config = load_config(verbose=False)
+        config['hf_token'] = hf_token
+        config['google_api_key'] = google_key
+        
+        # Create a temporary configuration file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_config:
-            config_data = {
-                "hf_token": hf_token,
-                "google_api_key": google_key,
-                # Copy other settings from the loaded config
-                **{k: v for k, v in load_config(verbose=False).items() 
-                   if k not in ["hf_token", "google_api_key"]}
-            }
-            json.dump(config_data, temp_config)
+            json.dump(config, temp_config)
             temp_config_path = temp_config.name
-
-        # Create the CLI command
-        cmd = [
-            "python", "-m", "financial_misinfo",  # Use module invocation
-            "--config", temp_config_path,
-            "verify",
-            claim
-        ]
-
-        # Run the command with timeout
+        
         try:
-            # Use subprocess.run instead of Popen for simpler handling
-            result = subprocess.run(
-                cmd, 
-                capture_output=True, 
-                text=True, 
-                timeout=timeout
-            )
-
-            # Check for errors
-            if result.returncode != 0:
-                return {
-                    "error": "Verification failed",
-                    "details": result.stderr
-                }
-
-            # Try to parse the output
-            try:
-                parsed_result = json.loads(result.stdout)
-                return parsed_result
-            except json.JSONDecodeError:
-                return {
-                    "error": "Could not parse verification result",
-                    "details": result.stdout
-                }
-
-        except subprocess.TimeoutExpired:
+            # Initialize the system with the temporary config
+            system = FinancialMisinfoSystem(config_path=temp_config_path)
+            
+            # Verify the claim
+            result = system.verify_claim(claim)
+            
+            # Ensure a consistent return structure
             return {
-                "error": f"Verification timed out after {timeout} seconds",
-                "details": "Process took too long to complete"
+                "final_verdict": {
+                    "label": result.get('label', 'unknown'),
+                    "evidence": result.get('evidence', 'No evidence provided'),
+                    "source": result.get('source', []),
+                    "confidence": result.get('confidence', 0.0)
+                }
+            }
+        
+        except Exception as system_error:
+            return {
+                "error": "Verification system error",
+                "details": str(system_error)
             }
         finally:
-            # Clean up temp file
+            # Clean up temporary config file
             try:
                 os.unlink(temp_config_path)
             except:
                 pass
-
+    
+    except ImportError:
+        return {
+            "error": "Could not import verification system",
+            "details": "The financial_misinfo module is not installed or accessible"
+        }
     except Exception as e:
         return {
-            "error": "Unexpected error during verification",
-            "details": str(e)
+            "error": str(e),
+            "details": traceback.format_exc()
         }
 
 # Function to check index files
