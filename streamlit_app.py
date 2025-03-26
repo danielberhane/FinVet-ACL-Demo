@@ -346,8 +346,8 @@ def main():
                         
                         stdout, stderr = process.communicate(timeout=180)
                         
-                       if process.returncode == 0:
-                            # Success! Now process the results
+                        if process.returncode == 0:
+                        # Success! Now process the results
                             end_time = time.time()
                             
                             # Show timing information
