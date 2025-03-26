@@ -75,7 +75,7 @@ def on_change_claim():
     st.session_state.claim_text = st.session_state.claim_input
 
 
-"""
+
 # Function to call CLI verification
 def call_cli_verify(claim, hf_token, google_key, timeout=180):
     
@@ -150,41 +150,7 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
             "details": traceback.format_exc()
         }
 
-"""
 
-
-def call_cli_verify(claim, hf_token, google_key, timeout=180):
-    # Attempt to use the verification system directly
-    try:
-        from financial_misinfo.system import FinancialMisinfoSystem
-        
-        # Prepare configuration
-        config = load_config(verbose=False)
-        config['hf_token'] = hf_token
-        config['google_api_key'] = google_key
-        
-        # Create system instance
-        system = FinancialMisinfoSystem(config)
-        
-        # Verify the claim
-        result = system.verify_claim(claim)
-        
-        # Return structured result
-        return {
-            "final_verdict": {
-                "label": result.get('label', 'unknown').lower(),
-                "evidence": result.get('evidence', 'No evidence provided'),
-                "source": result.get('source', []),
-                "confidence": float(result.get('confidence', 0.0))
-            }
-        }
-    
-    except Exception as e:
-        # Fallback error handling
-        return {
-            "error": "Verification failed",
-            "details": str(e)
-        }
 # Function to check index files
 def check_index_files(config):
     """Check if the required index files exist"""
