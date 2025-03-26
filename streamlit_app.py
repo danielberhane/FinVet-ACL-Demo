@@ -302,6 +302,7 @@ def main():
     with col2:
         st.subheader("Verification Results")
         
+        # Inside the verification part of the main function
         if verify and claim:
             with st.spinner("Analyzing claim..."):
                 try:
@@ -314,13 +315,16 @@ def main():
                             "hf_token": hf_token,
                             "google_api_key": google_key,
                             **{k: v for k, v in config.items() 
-                               if k not in ["hf_token", "google_api_key"]}
+                            if k not in ["hf_token", "google_api_key"]}
                         }
                         json.dump(config_data, temp_config)
                         config_path = temp_config.name
                     
+                    # Try two approaches - first CLI/module, then direct
+                    success = False
+                    
+                    # 1. Try CLI/module approach
                     try:
-                        # Check if we should use CLI or direct approach
                         if isinstance(cli_tool, list):
                             st.warning("Using module approach. This might fail if the module can't be imported.")
                             cmd = cli_tool + ["--config", config_path, "verify", claim]
@@ -331,7 +335,7 @@ def main():
                         # Display the command being run
                         st.code(" ".join(cmd))
                         
-                        # Run verification
+                        # Try with a shorter timeout first
                         process = subprocess.Popen(
                             cmd, 
                             stdout=subprocess.PIPE, 
@@ -339,46 +343,84 @@ def main():
                             text=True
                         )
                         
-                        stdout, stderr = process.communicate(timeout=180)
+                        st.info("Waiting for verification result...")
+                        stdout, stderr = process.communicate(timeout=60)
                         
-                        # Check for errors
-                        if process.returncode != 0 or "No module named financial_misinfo" in stderr:
-                            st.error("CLI verification failed")
-                            st.code(stderr)
+                        # Check if we got a result
+                        if process.returncode == 0 and not stderr:
+                            success = True
+                            st.success("Verification complete!")
                             
-                            # Fall back to direct verification
-                            st.warning("Trying direct verification method...")
-                            direct_result = direct_verify(claim, hf_token, google_key)
-                            
-                            if direct_result["success"]:
-                                st.success("Direct verification worked!")
-                                st.json(direct_result["result"])
+                            # Display results based on output
+                            if "true" in stdout.lower():
+                                st.success("Claim appears to be TRUE")
+                            elif "false" in stdout.lower():
+                                st.error("Claim appears to be FALSE")
                             else:
-                                st.error(f"Direct verification also failed: {direct_result['error']}")
-                                st.code(direct_result["traceback"])
-                            st.stop()
-                        
-                        # Display results
-                        st.success("Verification complete!")
-                        
-                        # Try to parse the verdict
-                        if "true" in stdout.lower():
-                            st.success("Claim appears to be TRUE")
-                        elif "false" in stdout.lower():
-                            st.error("Claim appears to be FALSE")
+                                st.warning("Not enough information to verify")
+                            
+                            # Show raw output
+                            with st.expander("Raw Output"):
+                                st.code(stdout)
                         else:
-                            st.warning("Not enough information to verify")
+                            st.error("CLI/module verification failed")
+                            if stderr:
+                                st.code(stderr)
+                    
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        st.warning("Verification timed out. This might be due to slow processing.")
+                        success = False
+                    except Exception as e:
+                        st.error(f"Error with CLI/module approach: {e}")
+                        success = False
+                    
+                    # 2. If CLI/module didn't work, try direct approach
+                    if not success:
+                        st.warning("Trying direct verification approach...")
                         
-                        # Display raw output
-                        with st.expander("Raw Output"):
-                            st.code(stdout)
-                        
-                    finally:
-                        # Clean up temp file
                         try:
+                            # Import necessary components directly
+                            from financial_misinfo.system import FinancialMisinfoSystem
+                            
+                            # Show progress
+                            st.info("Initializing verification system...")
+                            
+                            # Create system with provided config
+                            system = FinancialMisinfoSystem(config_data)
+                            
+                            # Verify claim
+                            st.info(f"Verifying claim: {claim}")
+                            result = system.verify(claim)
+                            
+                            # Show result
+                            st.success("Verification complete!")
+                            st.json(result)
+                            
+                            if "label" in result:
+                                if result["label"].lower() == "true":
+                                    st.success("Claim appears to be TRUE")
+                                elif result["label"].lower() == "false":
+                                    st.error("Claim appears to be FALSE")
+                                else:
+                                    st.warning("Not enough information to verify")
+                            
+                            if "evidence" in result:
+                                st.subheader("Evidence")
+                                st.write(result["evidence"])
+                        except Exception as direct_error:
+                            st.error(f"Direct verification failed: {direct_error}")
+                            st.error(traceback.format_exc())
+                except Exception as e:
+                    st.error(f"Verification error: {str(e)}")
+                    st.code(traceback.format_exc())
+                finally:
+                    # Clean up temp file
+                    try:
+                        if 'config_path' in locals():
                             os.unlink(config_path)
-                        except:
-                            pass
+                    except:
+                        pass
                 
                 except Exception as e:
                     st.error(f"Error during verification: {str(e)}")
