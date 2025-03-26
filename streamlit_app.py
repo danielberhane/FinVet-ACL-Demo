@@ -36,6 +36,7 @@ def download_index_files():
     try:
         # GitHub release URL (replace with your actual release URL)
         release_base_url = "https://github.com/danielberhane/FinVet-ACL-Demo/releases/download/v0.1.4/"
+    
         
         # Download vector store
         if not os.path.exists(vector_store_path):
@@ -65,9 +66,11 @@ def on_change_claim():
     """Callback function when claim text changes"""
     st.session_state.claim_text = st.session_state.claim_input
 
+
+"""
 # Function to call CLI verification
 def call_cli_verify(claim, hf_token, google_key, timeout=180):
-    """Run the verification using the CLI command"""
+    
     try:
         # Create temporary config file with credentials
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_config:
@@ -131,6 +134,31 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
             }
         }
         
+        return result
+    
+    except Exception as e:
+        return {
+            "error": str(e),
+            "details": traceback.format_exc()
+        }
+
+"""
+
+
+# Replace subprocess call with direct Python module import
+def call_cli_verify(claim, hf_token, google_key, timeout=180):
+    try:
+        # Import the verification function directly from your module
+        from financial_misinfo.system import verify_claim  # Adjust import as needed
+        
+        # Prepare config
+        config = {
+            "hf_token": hf_token,
+            "google_api_key": google_key
+        }
+        
+        # Call verification function directly
+        result = verify_claim(claim, config)
         return result
     
     except Exception as e:
