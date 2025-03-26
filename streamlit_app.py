@@ -385,14 +385,21 @@ def main():
                             evidence_match = re.search(r"Evidence:\s*(.*?)(?:Source:|$)", stdout, re.DOTALL)
                             if evidence_match:
                                 evidence = evidence_match.group(1).strip()
-                                st.write(evidence)
-                            
+                                # Format the evidence in a container with proper spacing
+                                st.markdown(f"""<div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px;">
+                                    {evidence.replace('$', '\\$')}
+                                    </div>""", unsafe_allow_html=True)
+
+                         
+                           
                             # Extract source
                             st.write("**Source:**")
                             source_match = re.search(r"Source:\s*(.*?)(?:COMPONENT DETAILS:|$)", stdout, re.DOTALL)
                             if source_match:
                                 source = source_match.group(1).strip()
-                                st.write(source)
+                                st.markdown(f"""<div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px;">
+                                    {source}
+                                    </div>""", unsafe_allow_html=True)
                             
                             # Create component details tabs
                             st.subheader("Component Details")
@@ -419,12 +426,15 @@ def main():
                                     rag_a_conf = re.search(r"Confidence:\s*([\d.]+)", rag_a_text)
                                     if rag_a_conf:
                                         st.write(f"**Confidence:** {rag_a_conf.group(1)}")
-                                    
+
                                     # Get RAG A evidence
                                     rag_a_evid = re.search(r"Evidence:\s*(.*?)(?:Source:|$)", rag_a_text, re.DOTALL)
                                     if rag_a_evid:
+                                        evidence = rag_a_evid.group(1).strip()
                                         st.write("**Evidence:**")
-                                        st.write(rag_a_evid.group(1).strip())
+                                        st.markdown(f"""<div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px;">
+                                            {evidence.replace('$', '\\$')}
+                                            </div>""", unsafe_allow_html=True)
                                     
                                     # Get RAG A source
                                     rag_a_src = re.search(r"Source:\s*(.*?)(?:$|RAG PIPELINE B:)", rag_a_text, re.DOTALL)
