@@ -381,25 +381,29 @@ def main():
                                 st.write(f"**Confidence:** {confidence}")
                             
                             # Extract evidence
+                            # Extract evidence
                             st.write("**Evidence:**")
                             evidence_match = re.search(r"Evidence:\s*(.*?)(?:Source:|$)", stdout, re.DOTALL)
                             if evidence_match:
                                 evidence = evidence_match.group(1).strip()
+                                # First replace dollar signs
+                                evidence_formatted = evidence.replace('$', '&#36;')
                                 # Format the evidence in a container with proper spacing
                                 st.markdown(f"""<div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px;">
-                                    {evidence.replace('$', '\\$')}
+                                    {evidence_formatted}
                                     </div>""", unsafe_allow_html=True)
 
                          
                            
-                            # Extract source
+                           # Extract source
                             st.write("**Source:**")
                             source_match = re.search(r"Source:\s*(.*?)(?:COMPONENT DETAILS:|$)", stdout, re.DOTALL)
                             if source_match:
                                 source = source_match.group(1).strip()
-                                st.markdown(f"""<div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px;">
+                                html_content = f"""<div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px;">
                                     {source}
-                                    </div>""", unsafe_allow_html=True)
+                                    </div>"""
+                                st.markdown(html_content, unsafe_allow_html=True)
                             
                             # Create component details tabs
                             st.subheader("Component Details")
@@ -427,20 +431,27 @@ def main():
                                     if rag_a_conf:
                                         st.write(f"**Confidence:** {rag_a_conf.group(1)}")
 
+                            
                                     # Get RAG A evidence
                                     rag_a_evid = re.search(r"Evidence:\s*(.*?)(?:Source:|$)", rag_a_text, re.DOTALL)
                                     if rag_a_evid:
                                         evidence = rag_a_evid.group(1).strip()
                                         st.write("**Evidence:**")
-                                        st.markdown(f"""<div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px;">
-                                            {evidence.replace('$', '\\$')}
-                                            </div>""", unsafe_allow_html=True)
-                                    
+                                        html_content = f"""<div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px;">
+                                            {evidence}
+                                            </div>"""
+                                        html_content = html_content.replace('$', '&#36;')
+                                        st.markdown(html_content, unsafe_allow_html=True)
+
                                     # Get RAG A source
                                     rag_a_src = re.search(r"Source:\s*(.*?)(?:$|RAG PIPELINE B:)", rag_a_text, re.DOTALL)
                                     if rag_a_src:
+                                        source = rag_a_src.group(1).strip()
                                         st.write("**Source:**")
-                                        st.write(rag_a_src.group(1).strip())
+                                        html_content = f"""<div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px;">
+                                            {source}
+                                            </div>"""
+                                        st.markdown(html_content, unsafe_allow_html=True)
                             
                             # RAG B Details
                             with rag_b_tab:
