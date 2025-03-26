@@ -7,6 +7,7 @@ import re
 import tempfile
 import json
 import subprocess
+import requests
 
 # Add project root and src to Python path
 project_root = os.path.abspath(os.path.dirname(__file__))
@@ -16,13 +17,48 @@ sys.path.insert(0, os.path.join(project_root, 'src'))
 # Custom imports from the project
 from financial_misinfo.utils.config import load_config, save_config
 
-# Set page configuration
-st.set_page_config(
-    page_title="FinVet | Financial Misinfo Detector",
-    page_icon="💹",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# Function to download index files from GitHub release
+def download_index_files():
+    """
+    Download index files from GitHub release if not already present
+    """
+    # Paths where index files will be stored
+    misinfo_dir = os.path.join(os.path.expanduser('~'), '.financial-misinfo')
+    os.makedirs(misinfo_dir, exist_ok=True)
+    
+    vector_store_path = os.path.join(misinfo_dir, 'faiss_index.bin')
+    metadata_path = os.path.join(misinfo_dir, 'metadata.pkl')
+    
+    # Check if files already exist
+    if os.path.exists(vector_store_path) and os.path.exists(metadata_path):
+        return True
+    
+    try:
+        # GitHub release URL (replace with your actual release URL)
+        release_base_url = "https://github.com/danielberhane/FinVet-ACL-Demo/releases/download/v0.1.4/"
+        
+        # Download vector store
+        if not os.path.exists(vector_store_path):
+            st.info("Downloading vector store index...")
+            vector_response = requests.get(f"{release_base_url}faiss_index.bin")
+            vector_response.raise_for_status()  # Raise an error for bad responses
+            with open(vector_store_path, 'wb') as f:
+                f.write(vector_response.content)
+        
+        # Download metadata
+        if not os.path.exists(metadata_path):
+            st.info("Downloading metadata index...")
+            metadata_response = requests.get(f"{release_base_url}metadata.pkl")
+            metadata_response.raise_for_status()  # Raise an error for bad responses
+            with open(metadata_path, 'wb') as f:
+                f.write(metadata_response.content)
+        
+        st.success("Index files downloaded successfully!")
+        return True
+    
+    except Exception as e:
+        st.error(f"Failed to download index files: {e}")
+        return False
 
 # Callback function for claim input
 def on_change_claim():
@@ -85,8 +121,7 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
             }
         
         # Parsing logic for the verification result
-        # (This is a simplified version - you might want to copy the full parsing 
-        # logic from the original enhanced_ui.py)
+        # This is a simplified version - you might want to add more detailed parsing
         result = {
             "final_verdict": {
                 "label": "unknown",
@@ -119,6 +154,14 @@ def check_index_files(config):
         issues.append(f"Metadata file not found at {metadata_path}")
     
     return issues
+
+# Set page configuration
+st.set_page_config(
+    page_title="FinVet | Financial Misinfo Detector",
+    page_icon="💹",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
 # Custom CSS for the application
 st.markdown("""
@@ -172,6 +215,11 @@ def get_secrets():
 
 # Main Streamlit app function
 def main():
+    # Download index files before anything else
+    if not download_index_files():
+        st.error("Could not download index files. Please check your internet connection.")
+        st.stop()
+
     # Title
     st.markdown('<h1 class="main-title">FinVet: Financial Misinformation Detector</h1>', unsafe_allow_html=True)
 
@@ -268,16 +316,6 @@ def main():
                 st.error("Missing index files")
                 for issue in index_issues:
                     st.warning(issue)
-                
-                st.info("""
-                Before verifying claims, you need to build the index. Run this command in your terminal:
-                ```
-                financial-misinfo build
-                ```
-                Or make sure your Vector Store Path and Metadata Path are correct in the Advanced Settings.
-                """)
-                
-                # No need to continue processing
                 st.stop()
             
             # Verification processing
