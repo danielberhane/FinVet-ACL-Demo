@@ -280,7 +280,7 @@ def main():
             examples = [
                 "Apple's stock price doubled in 2023",
                 "Tesla achieved profitability for the first time in 2020",
-                "Amazon acquired Whole Foods for $13 billion"
+                "On June 16, 2017, Amazon announced that it had reached an agreement to acquire Whole Foods Market, Inc. for approximately 13.7 million dollars"
             ]
             
             col1_ex, col2_ex, col3_ex = st.columns(3)
