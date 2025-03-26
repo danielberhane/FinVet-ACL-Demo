@@ -1,5 +1,38 @@
 import os
 import sys
+import warnings
+
+# Disable warnings
+warnings.filterwarnings('ignore')
+os.environ['PYTHONWARNINGS'] = 'ignore'
+
+# Fix for PyTorch/Streamlit file watcher issue
+# This should be at the very top of your file
+try:
+    import streamlit.watcher.local_sources_watcher as watcher
+    original_extract_paths = watcher.extract_paths
+    
+    def patched_extract_paths(module):
+        if module.__name__.startswith('torch.'):
+            # Skip path extraction for torch modules
+            return []
+        return original_extract_paths(module)
+    
+    # Patch the function
+    watcher.extract_paths = patched_extract_paths
+except Exception:
+    # If we can't patch, continue anyway
+    pass
+
+# Fix for torch JIT issues
+try:
+    import torch
+    torch._C._jit_set_profiling_mode(False)
+    torch._C._jit_set_profiling_executor(False)
+except Exception:
+    pass
+
+# Now continue with the rest of your imports
 import streamlit as st
 import requests
 import subprocess
