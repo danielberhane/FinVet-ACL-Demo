@@ -186,7 +186,7 @@ def direct_verify(claim, hf_token, google_key):
         }
 
 # Simple CLI finder
-def find_cli_tool():
+def find_cli_tool(verbose=True):
     """Find financial-misinfo CLI tool"""
     import shutil
     
@@ -198,33 +198,43 @@ def find_cli_tool():
         "/app/.local/bin/financial-misinfo",  # Streamlit Cloud path
     ]
     
-    # Log the paths being checked
-    st.write("Looking for CLI tool in these locations:")
-    for path in paths:
-        if path:
-            exists = os.path.exists(path)
-            st.write(f"- {path}: {'✅ Found' if exists else '❌ Not found'}")
-
-# Return first existing path
+    # Log the paths being checked only if verbose
+    if verbose:
+        st.write("Looking for CLI tool in these locations:")
+        for path in paths:
+            if path:
+                exists = os.path.exists(path)
+                st.write(f"- {path}: {'✅ Found' if exists else '❌ Not found'}")
+    
+    # Return first existing path
     for path in paths:
         if path and os.path.exists(path):
+            if verbose:
+                st.success(f"Using CLI tool found at: {path}")
             return path
     
     # Install CLI if needed
-    st.warning("CLI not found. Attempting to install...")
+    if verbose:
+        st.warning("CLI not found. Attempting to install...")
+    
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", "."])
-        st.success("Installation complete. Trying again...")
+        
+        if verbose:
+            st.success("Installation complete. Trying again...")
         
         # Check again
         cli_path = shutil.which("financial-misinfo")
         if cli_path and os.path.exists(cli_path):
             return cli_path
     except Exception as e:
-        st.error(f"Installation failed: {e}")
+        if verbose:
+            st.error(f"Installation failed: {e}")
     
     # Fall back to module approach 
-    st.warning("CLI tool not found. Will try to use module approach.")
+    if verbose:
+        st.warning("CLI tool not found. Will try to use module approach.")
+    
     return [sys.executable, "-m", "financial_misinfo"]
 
 def main():
@@ -306,8 +316,8 @@ def main():
         if verify and claim:
             with st.spinner("Analyzing claim..."):
                 try:
-                    # First try to find the CLI tool
-                    cli_tool = find_cli_tool()
+                    # Find CLI tool without displaying messages
+                    cli_tool = find_cli_tool(verbose=False)  # Add verbose parameter
                     
                     # Create temp config file with credentials
                     with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_config:
@@ -323,20 +333,14 @@ def main():
                     # Start timing verification process
                     start_time = time.time()
                     
-                    # Try CLI/module approach
+                    # Try CLI/module approach without showing diagnostic messages
                     try:
                         if isinstance(cli_tool, list):
-                            st.warning("Using module approach. This might fail if the module can't be imported.")
                             cmd = cli_tool + ["--config", config_path, "verify", claim]
                         else:
-                            st.success(f"Using CLI tool found at: {cli_tool}")
                             cmd = [cli_tool, "--config", config_path, "verify", claim]
                         
-                        # Display the command being run
-                        st.code(" ".join(cmd))
-                        
-                        # Run verification
-                        st.info("Waiting for verification result...")
+                        # Run verification process silently
                         process = subprocess.Popen(
                             cmd, 
                             stdout=subprocess.PIPE, 
@@ -347,14 +351,14 @@ def main():
                         stdout, stderr = process.communicate(timeout=180)
                         
                         if process.returncode == 0:
-                        # Success! Now process the results
+                            # Success! Now process the results
                             end_time = time.time()
                             
                             # Show timing information
                             verification_time = end_time - start_time
                             st.success(f"Analysis completed in {verification_time:.2f} seconds")
                             
-                            # Parse the output to extract structured information
+                            # Parse the output
                             import re
                             
                             # Extract final verdict label
@@ -375,9 +379,6 @@ def main():
                             if confidence_match:
                                 confidence = float(confidence_match.group(1))
                                 st.write(f"**Confidence:** {confidence}")
-                            
-                            # Simple divider
-                            st.markdown("---")
                             
                             # Extract evidence
                             st.write("**Evidence:**")
@@ -419,12 +420,17 @@ def main():
                                     if rag_a_conf:
                                         st.write(f"**Confidence:** {rag_a_conf.group(1)}")
                                     
+                                    # Get RAG A evidence
+                                    rag_a_evid = re.search(r"Evidence:\s*(.*?)(?:Source:|$)", rag_a_text, re.DOTALL)
+                                    if rag_a_evid:
+                                        st.write("**Evidence:**")
+                                        st.write(rag_a_evid.group(1).strip())
+                                    
                                     # Get RAG A source
-                                    st.write("**Source:**")
                                     rag_a_src = re.search(r"Source:\s*(.*?)(?:$|RAG PIPELINE B:)", rag_a_text, re.DOTALL)
                                     if rag_a_src:
-                                        source = rag_a_src.group(1).strip()
-                                        st.write(source)
+                                        st.write("**Source:**")
+                                        st.write(rag_a_src.group(1).strip())
                             
                             # RAG B Details
                             with rag_b_tab:
