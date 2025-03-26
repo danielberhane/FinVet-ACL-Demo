@@ -154,8 +154,8 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
 
 
 def call_cli_verify(claim, hf_token, google_key, timeout=180):
+    # Attempt to use the verification system directly
     try:
-        # First, try to import the verification system
         from financial_misinfo.system import FinancialMisinfoSystem
         
         # Prepare configuration
@@ -163,91 +163,28 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
         config['hf_token'] = hf_token
         config['google_api_key'] = google_key
         
-        # Create a temporary configuration file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_config:
-            json.dump(config, temp_config)
-            temp_config_path = temp_config.name
+        # Create system instance
+        system = FinancialMisinfoSystem(config)
         
-        try:
-            # Attempt to use Python module verification
-            system = FinancialMisinfoSystem(config_path=temp_config_path)
-            result = system.verify_claim(claim)
-            
-            # Normalize the result structure
-            return {
-                "final_verdict": {
-                    "label": result.get('label', 'unknown').lower(),
-                    "evidence": result.get('evidence', 'No evidence provided'),
-                    "source": result.get('source', []),
-                    "confidence": float(result.get('confidence', 0.0))
-                }
+        # Verify the claim
+        result = system.verify_claim(claim)
+        
+        # Return structured result
+        return {
+            "final_verdict": {
+                "label": result.get('label', 'unknown').lower(),
+                "evidence": result.get('evidence', 'No evidence provided'),
+                "source": result.get('source', []),
+                "confidence": float(result.get('confidence', 0.0))
             }
-        
-        except Exception as module_error:
-            # If Python module fails, fall back to CLI method
-            try:
-                # Create the CLI command
-                cmd = [
-                    "financial-misinfo",
-                    "--config", temp_config_path,
-                    "verify",
-                    claim
-                ]
-                
-                # Run the command with timeout
-                process = subprocess.Popen(
-                    cmd, 
-                    stdout=subprocess.PIPE, 
-                    stderr=subprocess.PIPE,
-                    text=True
-                )
-                
-                # Wait for the process with timeout
-                try:
-                    stdout, stderr = process.communicate(timeout=timeout)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    stdout, stderr = process.communicate()
-                    return {
-                        "error": f"Verification timed out after {timeout} seconds",
-                        "details": stdout + stderr
-                    }
-                
-                if stderr and "error" in stderr.lower():
-                    return {
-                        "error": "Error during verification",
-                        "details": stderr
-                    }
-                
-                # Parsing logic for the verification result
-                return {
-                    "final_verdict": {
-                        "label": "unknown",
-                        "evidence": "No evidence provided",
-                        "source": [],
-                        "confidence": 0.0
-                    }
-                }
-            
-            except Exception as cli_error:
-                # If both methods fail, return an error
-                return {
-                    "error": "Verification failed",
-                    "details": f"Module error: {module_error}\nCLI error: {cli_error}"
-                }
-        finally:
-            # Clean up temp file
-            try:
-                os.unlink(temp_config_path)
-            except:
-                pass
+        }
     
     except Exception as e:
+        # Fallback error handling
         return {
-            "error": str(e),
-            "details": traceback.format_exc()
+            "error": "Verification failed",
+            "details": str(e)
         }
-
 # Function to check index files
 def check_index_files(config):
     """Check if the required index files exist"""
