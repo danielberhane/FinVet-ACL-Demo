@@ -1,26 +1,31 @@
-import sys
 import os
+import sys
 
+# Set environment variables to mitigate PyTorch-related issues
+os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
+os.environ['PYTHONWARNINGS'] = 'ignore'
 
+# Workaround for torch import issues
+try:
+    import torch
+    torch._C._jit_set_profiling_mode(False)
+    torch._C._jit_set_profiling_executor(False)
+except:
+    pass
 
-# Add these early to prevent PyTorch-related import issues
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning)
+# Disable Streamlit's source file watcher for problematic modules
+import streamlit.watcher.local_sources_watcher as watcher
+def dummy_extract_paths(module):
+    return []
+watcher.extract_paths = dummy_extract_paths
 
-# Ensure the correct Python path
-project_root = os.path.abspath(os.path.dirname(__file__))
-sys.path.insert(0, project_root)
-sys.path.insert(0, os.path.join(project_root, 'src'))
-
-# Now other imports
+# Rest of your imports
 import streamlit as st
-import time
+import warnings
 import traceback
-import re
 import tempfile
 import json
 import subprocess
-
 import requests
 
 # Set page configuration
@@ -92,9 +97,6 @@ def on_change_claim():
 
 def call_cli_verify(claim, hf_token, google_key, timeout=180):
     try:
-        # Use sys.executable to ensure we're using the correct Python interpreter
-        import sys
-        
         # Create temporary config file with credentials
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_config:
             config_data = {
@@ -107,33 +109,54 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
             json.dump(config_data, temp_config)
             temp_config_path = temp_config.name
 
-        try:
-            # Attempt to run as a module
-            cmd = [
-                sys.executable, "-m", "financial_misinfo", 
-                "--config", temp_config_path,
-                "verify",
-                claim
-            ]
-            
-            # Run the command with timeout
-            process = subprocess.Popen(
-                cmd, 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            
-            # Wait for the process with timeout
+        # Multiple strategies to run the command
+        cmd_strategies = [
+            ["financial-misinfo", "--config", temp_config_path, "verify", claim],
+            [sys.executable, "-m", "financial_misinfo", "--config", temp_config_path, "verify", claim],
+            [os.path.join(sys.prefix, "bin", "financial-misinfo"), "--config", temp_config_path, "verify", claim]
+        ]
+
+        last_error = None
+        for cmd in cmd_strategies:
             try:
-                stdout, stderr = process.communicate(timeout=timeout)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                stdout, stderr = process.communicate()
-                return {
-                    "error": f"Verification timed out after {timeout} seconds",
-                    "details": stdout + stderr
+                # Run the command with timeout
+                process = subprocess.Popen(
+                    cmd, 
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+
+                try:
+                    stdout, stderr = process.communicate(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    stdout, stderr = process.communicate()
+                    last_error = f"Verification timed out after {timeout} seconds"
+                    continue
+
+                # Check for errors
+                if stderr and "error" in stderr.lower():
+                    last_error = f"Error during verification: {stderr}"
+                    continue
+
+                # Default result if no specific parsing is possible
+                result = {
+                    "final_verdict": {
+                        "label": "unknown",
+                        "evidence": "No evidence provided",
+                        "source": [],
+                        "confidence": 0.0
+                    }
                 }
+
+                return result
+
+            except FileNotFoundError:
+                continue
+            except Exception as e:
+                last_error = str(e)
+                continue
             finally:
                 # Clean up temp file
                 try:
@@ -141,30 +164,12 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
                 except:
                     pass
 
-            if stderr and "error" in stderr.lower():
-                return {
-                    "error": "Error during verification",
-                    "details": stderr
-                }
-            
-            # Default result if no specific parsing is possible
-            result = {
-                "final_verdict": {
-                    "label": "unknown",
-                    "evidence": "No evidence provided",
-                    "source": [],
-                    "confidence": 0.0
-                }
-            }
-            
-            return result
-        
-        except Exception as e:
-            return {
-                "error": "Verification failed",
-                "details": str(e)
-            }
-    
+        # If all attempts fail, return comprehensive error
+        return {
+            "error": "Verification failed",
+            "details": last_error or "Could not run verification command"
+        }
+
     except Exception as e:
         return {
             "error": str(e),
