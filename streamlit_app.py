@@ -1,6 +1,7 @@
 import os
 import sys
 import warnings
+import time
 
 # Disable warnings
 warnings.filterwarnings('ignore')
@@ -345,7 +346,7 @@ def main():
                         
                         stdout, stderr = process.communicate(timeout=180)
                         
-                        if process.returncode == 0:
+                       if process.returncode == 0:
                             # Success! Now process the results
                             end_time = time.time()
                             
@@ -358,7 +359,6 @@ def main():
                             
                             # Extract final verdict label
                             verdict_match = re.search(r"Label:\s*(\w+)", stdout)
-                            verdict = "unknown"
                             if verdict_match:
                                 verdict = verdict_match.group(1).upper()
                                 
@@ -368,7 +368,7 @@ def main():
                                 elif verdict == "FALSE":
                                     st.error(f"## {verdict}")
                                 else:
-                                    st.warning(f"## NOT ENOUGH INFO")
+                                    st.warning("## NOT ENOUGH INFO")
                             
                             # Extract confidence
                             confidence_match = re.search(r"Confidence:\s*([\d.]+)", stdout)
@@ -376,19 +376,22 @@ def main():
                                 confidence = float(confidence_match.group(1))
                                 st.write(f"**Confidence:** {confidence}")
                             
+                            # Simple divider
+                            st.markdown("---")
+                            
                             # Extract evidence
+                            st.write("**Evidence:**")
                             evidence_match = re.search(r"Evidence:\s*(.*?)(?:Source:|$)", stdout, re.DOTALL)
                             if evidence_match:
                                 evidence = evidence_match.group(1).strip()
-                                st.subheader("Evidence:")
-                                st.markdown(evidence)
+                                st.write(evidence)
                             
                             # Extract source
+                            st.write("**Source:**")
                             source_match = re.search(r"Source:\s*(.*?)(?:COMPONENT DETAILS:|$)", stdout, re.DOTALL)
                             if source_match:
                                 source = source_match.group(1).strip()
-                                st.subheader("Source:")
-                                st.markdown(source)
+                                st.write(source)
                             
                             # Create component details tabs
                             st.subheader("Component Details")
@@ -416,19 +419,12 @@ def main():
                                     if rag_a_conf:
                                         st.write(f"**Confidence:** {rag_a_conf.group(1)}")
                                     
-                                    # Get RAG A evidence
-                                    rag_a_evid = re.search(r"Evidence:\s*(.*?)(?:Source:|$)", rag_a_text, re.DOTALL)
-                                    if rag_a_evid:
-                                        evidence = rag_a_evid.group(1).strip()
-                                        st.write("**Evidence:**")
-                                        st.markdown(evidence)
-                                    
                                     # Get RAG A source
+                                    st.write("**Source:**")
                                     rag_a_src = re.search(r"Source:\s*(.*?)(?:$|RAG PIPELINE B:)", rag_a_text, re.DOTALL)
                                     if rag_a_src:
                                         source = rag_a_src.group(1).strip()
-                                        st.write("**Source:**")
-                                        st.markdown(source)
+                                        st.write(source)
                             
                             # RAG B Details
                             with rag_b_tab:
