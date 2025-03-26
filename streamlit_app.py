@@ -153,26 +153,71 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
 """
 
 
-# Replace subprocess call with direct Python module import
 def call_cli_verify(claim, hf_token, google_key, timeout=180):
     try:
-        # Import the verification function directly from your module
-        from financial_misinfo.system import verify_claim  # Adjust import as needed
-        
-        # Prepare config
-        config = {
-            "hf_token": hf_token,
-            "google_api_key": google_key
-        }
-        
-        # Call verification function directly
-        result = verify_claim(claim, config)
-        return result
-    
+        # Create temporary config file with credentials
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_config:
+            config_data = {
+                "hf_token": hf_token,
+                "google_api_key": google_key,
+                # Copy other settings from the loaded config
+                **{k: v for k, v in load_config(verbose=False).items() 
+                   if k not in ["hf_token", "google_api_key"]}
+            }
+            json.dump(config_data, temp_config)
+            temp_config_path = temp_config.name
+
+        # Create the CLI command
+        cmd = [
+            "python", "-m", "financial_misinfo",  # Use module invocation
+            "--config", temp_config_path,
+            "verify",
+            claim
+        ]
+
+        # Run the command with timeout
+        try:
+            # Use subprocess.run instead of Popen for simpler handling
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                timeout=timeout
+            )
+
+            # Check for errors
+            if result.returncode != 0:
+                return {
+                    "error": "Verification failed",
+                    "details": result.stderr
+                }
+
+            # Try to parse the output
+            try:
+                parsed_result = json.loads(result.stdout)
+                return parsed_result
+            except json.JSONDecodeError:
+                return {
+                    "error": "Could not parse verification result",
+                    "details": result.stdout
+                }
+
+        except subprocess.TimeoutExpired:
+            return {
+                "error": f"Verification timed out after {timeout} seconds",
+                "details": "Process took too long to complete"
+            }
+        finally:
+            # Clean up temp file
+            try:
+                os.unlink(temp_config_path)
+            except:
+                pass
+
     except Exception as e:
         return {
-            "error": str(e),
-            "details": traceback.format_exc()
+            "error": "Unexpected error during verification",
+            "details": str(e)
         }
 
 # Function to check index files
