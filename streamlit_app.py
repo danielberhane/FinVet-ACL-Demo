@@ -1,5 +1,18 @@
 import sys
 import os
+
+
+
+# Add these early to prevent PyTorch-related import issues
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
+# Ensure the correct Python path
+project_root = os.path.abspath(os.path.dirname(__file__))
+sys.path.insert(0, project_root)
+sys.path.insert(0, os.path.join(project_root, 'src'))
+
+# Now other imports
 import streamlit as st
 import time
 import traceback
@@ -7,6 +20,7 @@ import re
 import tempfile
 import json
 import subprocess
+
 import requests
 
 # Set page configuration
@@ -78,6 +92,9 @@ def on_change_claim():
 
 def call_cli_verify(claim, hf_token, google_key, timeout=180):
     try:
+        # Use sys.executable to ensure we're using the correct Python interpreter
+        import sys
+        
         # Create temporary config file with credentials
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_config:
             config_data = {
@@ -89,10 +106,9 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
             }
             json.dump(config_data, temp_config)
             temp_config_path = temp_config.name
-        
+
         try:
-            # Use sys.executable to ensure we're using the correct Python interpreter
-            import sys
+            # Attempt to run as a module
             cmd = [
                 sys.executable, "-m", "financial_misinfo", 
                 "--config", temp_config_path,
@@ -131,7 +147,7 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
                     "details": stderr
                 }
             
-            # Parsing logic for the verification result
+            # Default result if no specific parsing is possible
             result = {
                 "final_verdict": {
                     "label": "unknown",
@@ -143,10 +159,10 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
             
             return result
         
-        except FileNotFoundError:
+        except Exception as e:
             return {
-                "error": "Verification module not found",
-                "details": "Unable to locate the financial_misinfo module"
+                "error": "Verification failed",
+                "details": str(e)
             }
     
     except Exception as e:
@@ -154,7 +170,6 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
             "error": str(e),
             "details": traceback.format_exc()
         }
-
 
 
 
