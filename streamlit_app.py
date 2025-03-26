@@ -7,7 +7,6 @@ warnings.filterwarnings('ignore')
 os.environ['PYTHONWARNINGS'] = 'ignore'
 
 # Fix for PyTorch/Streamlit file watcher issue
-# This should be at the very top of your file
 try:
     import streamlit.watcher.local_sources_watcher as watcher
     original_extract_paths = watcher.extract_paths
@@ -38,6 +37,8 @@ import requests
 import subprocess
 import tempfile
 import json
+import traceback
+
 
 # Configure page
 st.set_page_config(
@@ -55,15 +56,53 @@ sys.path.insert(0, os.path.join(project_root, 'src'))
 # Import package
 try:
     from financial_misinfo.utils.config import load_config, save_config
-except ImportError:
-    st.error("Could not import financial_misinfo package. Installing...")
+    package_imported = True
+except ImportError as e:
+    package_imported = False
+    st.error(f"Could not import financial_misinfo package: {e}")
+    st.info("Attempting to install package...")
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", "."])
-        st.success("Package installed. Please refresh the page.")
-        st.stop()
+        st.warning("Package installed, but you might need to refresh the page.")
+        try:
+            from financial_misinfo.utils.config import load_config, save_config
+            package_imported = True
+            st.success("Package imported successfully after installation!")
+        except ImportError as e2:
+            st.error(f"Still could not import package after installation: {e2}")
+    except Exception as install_e:
+        st.error(f"Failed to install package: {install_e}")
+
+
+
+# Display debug information at the top for troubleshooting
+with st.expander("Debug Information", expanded=False):
+    st.write("### System Paths")
+    st.code("\n".join(sys.path))
+    
+    st.write("### Working Directory")
+    st.code(os.getcwd())
+    
+    st.write("### Current Directory Contents")
+    try:
+        st.code("\n".join(os.listdir(".")))
     except Exception as e:
-        st.error(f"Failed to install package: {e}")
-        st.stop()
+        st.code(f"Error listing directory: {e}")
+    
+    st.write("### Src Directory Contents")
+    try:
+        if os.path.exists("src"):
+            st.code("\n".join(os.listdir("src")))
+        else:
+            st.warning("src directory not found")
+    except Exception as e:
+        st.code(f"Error listing src directory: {e}")
+    
+    st.write("### Package Status")
+    if package_imported:
+        st.success("financial_misinfo package imported successfully")
+    else:
+        st.error("financial_misinfo package import failed")
 
 # Simple download function
 def download_index_files():
@@ -75,9 +114,12 @@ def download_index_files():
     # File paths
     vector_path = os.path.join(misinfo_dir, 'faiss_index.bin')
     metadata_path = os.path.join(misinfo_dir, 'metadata.pkl')
-    
+
     # Skip if already downloaded
     if os.path.exists(vector_path) and os.path.exists(metadata_path):
+        st.success(f"Index files already exist in {misinfo_dir}")
+        st.write(f"Vector store: {os.path.getsize(vector_path)} bytes")
+        st.write(f"Metadata: {os.path.getsize(metadata_path)} bytes")
         return True
     
     # GitHub release URL 
@@ -86,27 +128,61 @@ def download_index_files():
     try:
         # Download vector store
         if not os.path.exists(vector_path):
-            st.info("Downloading vector store index...")
+            st.info(f"Downloading vector store index to {vector_path}...")
             response = requests.get(f"{release_url}faiss_index.bin")
             response.raise_for_status()
             with open(vector_path, 'wb') as f:
                 f.write(response.content)
-            st.success("Vector store downloaded!")
+            st.success(f"Vector store downloaded! Size: {os.path.getsize(vector_path)} bytes")
         
         # Download metadata
         if not os.path.exists(metadata_path):
-            st.info("Downloading metadata index...")
+            st.info(f"Downloading metadata index to {metadata_path}...")
             response = requests.get(f"{release_url}metadata.pkl")
             response.raise_for_status()
             with open(metadata_path, 'wb') as f:
                 f.write(response.content)
-            st.success("Metadata downloaded!")
+            st.success(f"Metadata downloaded! Size: {os.path.getsize(metadata_path)} bytes")
         
         return True
     
     except Exception as e:
         st.error(f"Download failed: {str(e)}")
+        st.code(traceback.format_exc())
         return False
+    
+
+
+# Alternative verification that doesn't use CLI
+def direct_verify(claim, hf_token, google_key):
+    """Use direct API approach instead of CLI"""
+    st.warning("Using direct verification method (no CLI)")
+    try:
+        # Try to import and use the system directly
+        from financial_misinfo.system import FinancialMisinfoSystem
+        
+        # Set up config with credentials
+        config = load_config(verbose=False)
+        config['hf_token'] = hf_token
+        config['google_api_key'] = google_key
+        
+        # Create system
+        system = FinancialMisinfoSystem(config=config)
+        
+        # Verify claim
+        result = system.verify(claim)
+        
+        return {
+            "success": True,
+            "result": result,
+            "message": "Verification completed via direct API"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
 
 # Simple CLI finder
 def find_cli_tool():
@@ -121,15 +197,35 @@ def find_cli_tool():
         "/app/.local/bin/financial-misinfo",  # Streamlit Cloud path
     ]
     
-    # Return first existing path
+    # Log the paths being checked
+    st.write("Looking for CLI tool in these locations:")
+    for path in paths:
+        if path:
+            exists = os.path.exists(path)
+            st.write(f"- {path}: {'✅ Found' if exists else '❌ Not found'}")
+
+# Return first existing path
     for path in paths:
         if path and os.path.exists(path):
             return path
     
-    # Fall back to module approach
+    # Install CLI if needed
+    st.warning("CLI not found. Attempting to install...")
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", "."])
+        st.success("Installation complete. Trying again...")
+        
+        # Check again
+        cli_path = shutil.which("financial-misinfo")
+        if cli_path and os.path.exists(cli_path):
+            return cli_path
+    except Exception as e:
+        st.error(f"Installation failed: {e}")
+    
+    # Fall back to module approach 
+    st.warning("CLI tool not found. Will try to use module approach.")
     return [sys.executable, "-m", "financial_misinfo"]
 
-# Main function
 def main():
     # Title
     st.title("FinVet: Financial Misinformation Detector")
@@ -144,7 +240,11 @@ def main():
         st.stop()
     
     # Load config and API keys
-    config = load_config(verbose=False)
+    try:
+        config = load_config(verbose=False)
+    except Exception as e:
+        st.error(f"Failed to load config: {e}")
+        config = {}
     
     # Try to get API keys from Streamlit secrets
     hf_token = ""
@@ -205,7 +305,7 @@ def main():
         if verify and claim:
             with st.spinner("Analyzing claim..."):
                 try:
-                    # Find CLI tool
+                    # First try to find the CLI tool
                     cli_tool = find_cli_tool()
                     
                     # Create temp config file with credentials
@@ -220,11 +320,16 @@ def main():
                         config_path = temp_config.name
                     
                     try:
-                        # Create command
+                        # Check if we should use CLI or direct approach
                         if isinstance(cli_tool, list):
+                            st.warning("Using module approach. This might fail if the module can't be imported.")
                             cmd = cli_tool + ["--config", config_path, "verify", claim]
                         else:
+                            st.success(f"Using CLI tool found at: {cli_tool}")
                             cmd = [cli_tool, "--config", config_path, "verify", claim]
+                        
+                        # Display the command being run
+                        st.code(" ".join(cmd))
                         
                         # Run verification
                         process = subprocess.Popen(
@@ -237,13 +342,23 @@ def main():
                         stdout, stderr = process.communicate(timeout=180)
                         
                         # Check for errors
-                        if process.returncode != 0 or stderr:
-                            st.error("Verification failed")
-                            with st.expander("Error Details"):
-                                st.code(stderr)
+                        if process.returncode != 0 or "No module named financial_misinfo" in stderr:
+                            st.error("CLI verification failed")
+                            st.code(stderr)
+                            
+                            # Fall back to direct verification
+                            st.warning("Trying direct verification method...")
+                            direct_result = direct_verify(claim, hf_token, google_key)
+                            
+                            if direct_result["success"]:
+                                st.success("Direct verification worked!")
+                                st.json(direct_result["result"])
+                            else:
+                                st.error(f"Direct verification also failed: {direct_result['error']}")
+                                st.code(direct_result["traceback"])
                             st.stop()
                         
-                        # Display results (simplified)
+                        # Display results
                         st.success("Verification complete!")
                         
                         # Try to parse the verdict
@@ -266,12 +381,13 @@ def main():
                             pass
                 
                 except Exception as e:
-                    st.error(f"Error: {str(e)}")
+                    st.error(f"Error during verification: {str(e)}")
+                    st.code(traceback.format_exc())
     
     # Footer
     st.markdown("---")
     st.caption("FinVet: Financial Misinformation Detection System v0.1.4")
 
-# Run the app
+# Run the main function
 if __name__ == "__main__":
     main()
