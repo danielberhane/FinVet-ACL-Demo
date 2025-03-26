@@ -382,13 +382,27 @@ def main():
                             
                             # Extract evidence
                             # Extract evidence
-                            st.subheader("Evidence:")
+                            # Extract and process evidence
+                            st.write("**Evidence:**")
                             evidence_match = re.search(r"Evidence:\s*(.*?)(?:Source:|$)", stdout, re.DOTALL)
                             if evidence_match:
-                                evidence = evidence_match.group(1).strip()
-                                # Use a Streamlit container for the evidence
-                                with st.container():
-                                    st.write(evidence)
+                                # Get raw evidence text
+                                raw_evidence = evidence_match.group(1).strip()
+                                
+                                # Clean up the evidence text
+                                # 1. Replace runs of non-space characters with properly spaced text
+                                cleaned_evidence = re.sub(r'([a-z])([A-Z])', r'\1 \2', raw_evidence)
+                                # 2. Fix spacing around $ sign and numbers
+                                cleaned_evidence = re.sub(r'(\$)(\d+)', r'\1 \2', cleaned_evidence)
+                                # 3. Fix spacing around punctuation
+                                cleaned_evidence = re.sub(r'([.,;:!?])([a-zA-Z0-9])', r'\1 \2', cleaned_evidence)
+                                # 4. Normalize spaces (replace multiple spaces with single space)
+                                cleaned_evidence = re.sub(r'\s+', ' ', cleaned_evidence)
+                                # 5. Handle asterisks properly (markdown formatting)
+                                cleaned_evidence = re.sub(r'\*', '', cleaned_evidence)
+                                
+                                # Display the cleaned evidence
+                                st.markdown(cleaned_evidence)
                          
                            
                            
