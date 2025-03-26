@@ -155,7 +155,7 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
 
 def call_cli_verify(claim, hf_token, google_key, timeout=180):
     try:
-        # Import the verification system dynamically
+        # First, try to import the verification system
         from financial_misinfo.system import FinancialMisinfoSystem
         
         # Prepare configuration
@@ -169,39 +169,79 @@ def call_cli_verify(claim, hf_token, google_key, timeout=180):
             temp_config_path = temp_config.name
         
         try:
-            # Initialize the system with the temporary config
+            # Attempt to use Python module verification
             system = FinancialMisinfoSystem(config_path=temp_config_path)
-            
-            # Verify the claim
             result = system.verify_claim(claim)
             
-            # Ensure a consistent return structure
+            # Normalize the result structure
             return {
                 "final_verdict": {
-                    "label": result.get('label', 'unknown'),
+                    "label": result.get('label', 'unknown').lower(),
                     "evidence": result.get('evidence', 'No evidence provided'),
                     "source": result.get('source', []),
-                    "confidence": result.get('confidence', 0.0)
+                    "confidence": float(result.get('confidence', 0.0))
                 }
             }
         
-        except Exception as system_error:
-            return {
-                "error": "Verification system error",
-                "details": str(system_error)
-            }
+        except Exception as module_error:
+            # If Python module fails, fall back to CLI method
+            try:
+                # Create the CLI command
+                cmd = [
+                    "financial-misinfo",
+                    "--config", temp_config_path,
+                    "verify",
+                    claim
+                ]
+                
+                # Run the command with timeout
+                process = subprocess.Popen(
+                    cmd, 
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                
+                # Wait for the process with timeout
+                try:
+                    stdout, stderr = process.communicate(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    stdout, stderr = process.communicate()
+                    return {
+                        "error": f"Verification timed out after {timeout} seconds",
+                        "details": stdout + stderr
+                    }
+                
+                if stderr and "error" in stderr.lower():
+                    return {
+                        "error": "Error during verification",
+                        "details": stderr
+                    }
+                
+                # Parsing logic for the verification result
+                return {
+                    "final_verdict": {
+                        "label": "unknown",
+                        "evidence": "No evidence provided",
+                        "source": [],
+                        "confidence": 0.0
+                    }
+                }
+            
+            except Exception as cli_error:
+                # If both methods fail, return an error
+                return {
+                    "error": "Verification failed",
+                    "details": f"Module error: {module_error}\nCLI error: {cli_error}"
+                }
         finally:
-            # Clean up temporary config file
+            # Clean up temp file
             try:
                 os.unlink(temp_config_path)
             except:
                 pass
     
-    except ImportError:
-        return {
-            "error": "Could not import verification system",
-            "details": "The financial_misinfo module is not installed or accessible"
-        }
     except Exception as e:
         return {
             "error": str(e),
